@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "./supabaseClient";
-import agencyLogo from "./assets/logoo4.png";
+import agencyLogo from "./assets/agency-logo.svg";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // REVIEW TEMPLATE ENGINE — organic Hinglish, sentence-part combinator
@@ -30,6 +30,31 @@ async function saveToHistory(locationId, reviews) {
     const rows = reviews.map(review_text => ({ location_id: String(locationId), review_text }));
     await supabase.from("review_history").insert(rows);
   } catch {} // don't let a save failure block the UI
+}
+
+const CONFIG_ID = "default"; // one row per Supabase project — fine since each client gets their own project
+
+async function loadRemoteConfig() {
+  try {
+    const { data, error } = await supabase
+      .from("app_config")
+      .select("data")
+      .eq("id", CONFIG_ID)
+      .single();
+    if (error || !data) return null;
+    return data.data;
+  } catch {
+    return null; // fall back to DEFAULT_CONFIG if Supabase is unreachable
+  }
+}
+
+async function saveRemoteConfig(config) {
+  try {
+    await supabase.from("app_config").upsert({ id: CONFIG_ID, data: config, updated_at: new Date().toISOString() });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // Full organic Hinglish review pool, categorized by rating.
@@ -318,18 +343,19 @@ function ReviewFlow({ config, preselectedLocId }) {
     .regen-btn{font-size:12px;color:${accent};background:none;border:none;cursor:pointer;font-weight:600;text-decoration:underline;text-underline-offset:3px;font-family:inherit}
     .confetti-piece{position:absolute;width:8px;height:8px;border-radius:2px;animation:confettiFall 1.2s ease forwards}
   `;
-const Screen = ({ children, style }) => (
-  <div style={{ minHeight:"100svh", background:"#f7f7f5", display:"flex", flexDirection:"column", ...style }}>
-    <style>{css}</style>
-    <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", padding:"6px 20px 2px", background:"#fff", borderBottom:"1px solid #ececea", flexShrink:0, alignSelf:"stretch", width:"100%", boxSizing:"border-box" }}>
-      <img src={agencyLogo} alt="" style={{ height:80, width:"auto", objectFit:"contain" }} />
-      {config.clientLogo && (
-        <img src={config.clientLogo} alt="" style={{ height:80, width:"auto", maxWidth:150, objectFit:"contain" }} />
-      )}
+
+  const Screen = ({ children, style }) => (
+    <div style={{ minHeight:"100svh", background:"#f7f7f5", display:"flex", flexDirection:"column", ...style }}>
+      <style>{css}</style>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 20px", background:"#fff", borderBottom:"1px solid #ececea", flexShrink:0, alignSelf:"stretch", width:"100%", boxSizing:"border-box" }}>
+        <img src={agencyLogo} alt="" style={{ height:36, width:"auto", objectFit:"contain" }} />
+        {config.clientLogo && (
+          <img src={config.clientLogo} alt="" style={{ height:36, width:"auto", maxWidth:130, objectFit:"contain" }} />
+        )}
+      </div>
+      {children}
     </div>
-    {children}
-  </div>
-);
+  );
 
   if (step === 0) return (
     <Screen>
@@ -606,12 +632,18 @@ function AdminPanel({ config, setConfig, onExit }) {
   const [tab, setTab] = useState("general");
   const [draft, setDraft] = useState(JSON.parse(JSON.stringify(config)));
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState(false);
   const baseUrl = typeof window!=="undefined" ? window.location.origin+window.location.pathname : "https://yoursite.com/";
 
-  const save = () => {
+  const save = async () => {
     setConfig(draft);
-    try { localStorage.setItem("cafeReviewConfig", JSON.stringify(draft)); } catch {}
-    setSaved(true); setTimeout(()=>setSaved(false),2000);
+    const ok = await saveRemoteConfig(draft);
+    if (ok) {
+      setSaveError(false);
+      setSaved(true); setTimeout(()=>setSaved(false),2000);
+    } else {
+      setSaveError(true); setTimeout(()=>setSaveError(false),3000);
+    }
   };
 
   const updateLoc = (id,field,val) => setDraft(d=>({...d,locations:d.locations.map(l=>l.id===id?{...l,[field]:val}:l)}));
@@ -644,7 +676,7 @@ function AdminPanel({ config, setConfig, onExit }) {
         <div style={{ display:"flex", gap:8 }}>
           <button onClick={onExit} style={{ padding:"8px 14px", borderRadius:8, border:"1.5px solid #e8e8e4", background:"#fff", fontSize:13, cursor:"pointer", color:"#555", fontWeight:500 }}>← Exit</button>
           <button onClick={save} style={{ padding:"8px 16px", borderRadius:8, border:"none", background:saved?"#2a9d5c":"#1a1a1a", color:"#fff", fontSize:13, fontWeight:600, cursor:"pointer", transition:"background 0.3s", minWidth:110 }}>
-            {saved?"✓ Saved!":"Save changes"}
+            {saved ? "✓ Saved!" : saveError ? "⚠ Failed — retry" : "Save changes"}
           </button>
         </div>
       </div>
@@ -842,13 +874,23 @@ function AdminPanel({ config, setConfig, onExit }) {
 // ROOT
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function App() {
-  const [config, setConfig] = useState(() => {
-    try { const s=localStorage.getItem("cafeReviewConfig"); return s?JSON.parse(s):DEFAULT_CONFIG; }
-    catch { return DEFAULT_CONFIG; }
-  });
+  const [config, setConfig] = useState(DEFAULT_CONFIG);
+  const [configLoaded, setConfigLoaded] = useState(false);
   const [mode, setMode] = useState("review");
   const params = new URLSearchParams(window.location.search);
   const locId = params.get("loc");
+
+  useEffect(() => {
+    (async () => {
+      const remote = await loadRemoteConfig();
+      if (remote) setConfig(remote);
+      setConfigLoaded(true);
+    })();
+  }, []);
+
+  if (!configLoaded) {
+    return <div style={{ minHeight:"100svh", display:"flex", alignItems:"center", justifyContent:"center", background:"#f7f7f5", color:"#999", fontFamily:"'Inter',-apple-system,sans-serif" }}>Loading...</div>;
+  }
 
   return (
     <div style={{ fontFamily:"'Inter',-apple-system,sans-serif" }}>
