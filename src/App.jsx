@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./supabaseClient";
-import agencyLogo from "./assets/agency-logo.svg";
+import agencyLogo from "./assets/logoo4.png";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // REVIEW TEMPLATE ENGINE — organic Hinglish, sentence-part combinator
@@ -345,17 +345,17 @@ function ReviewFlow({ config, preselectedLocId }) {
   `;
 
   const Screen = ({ children, style }) => (
-    <div style={{ minHeight:"100svh", background:"#f7f7f5", display:"flex", flexDirection:"column", ...style }}>
-      <style>{css}</style>
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 20px", background:"#fff", borderBottom:"1px solid #ececea", flexShrink:0, alignSelf:"stretch", width:"100%", boxSizing:"border-box" }}>
-        <img src={agencyLogo} alt="" style={{ height:36, width:"auto", objectFit:"contain" }} />
-        {config.clientLogo && (
-          <img src={config.clientLogo} alt="" style={{ height:36, width:"auto", maxWidth:130, objectFit:"contain" }} />
-        )}
-      </div>
-      {children}
+  <div style={{ minHeight:"100svh", background:"#f7f7f5", display:"flex", flexDirection:"column", ...style }}>
+    <style>{css}</style>
+    <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", padding:"6px 20px 2px", background:"#fff", borderBottom:"1px solid #ececea", flexShrink:0, alignSelf:"stretch", width:"100%", boxSizing:"border-box" }}>
+      <img src={agencyLogo} alt="" style={{ height:80, width:"auto", objectFit:"contain" }} />
+      {config.clientLogo && (
+        <img src={config.clientLogo} alt="" style={{ height:80, width:"auto", maxWidth:150, objectFit:"contain" }} />
+      )}
     </div>
-  );
+    {children}
+  </div>
+);
 
   if (step === 0) return (
     <Screen>
